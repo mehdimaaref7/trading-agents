@@ -27,3 +27,15 @@ class MarketData:
             feed=DataFeed.IEX,
         )
         return self.client.get_stock_bars(req).df
+
+
+def to_panel(bars) -> dict:
+    """Transforme le DataFrame Alpaca (index symbole, date) en
+    {"open"|"high"|"low"|"close": DataFrame dates x symboles}."""
+    df = bars.reset_index()
+    df["date"] = df["timestamp"].dt.tz_convert("America/New_York").dt.normalize().dt.tz_localize(None)
+    panel = {}
+    for field in ("open", "high", "low", "close"):
+        panel[field] = df.pivot_table(index="date", columns="symbol", values=field).sort_index()
+    # Jours où le benchmark n'a pas coté = jours fériés ou trous de données : on les retire
+    return panel
