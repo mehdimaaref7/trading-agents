@@ -45,15 +45,16 @@ Les achats partent en ordre protégé (OTO avec stop, ou bracket stop + objectif
 
 ## Brancher Alpaca en MCP
 
-Le fichier `.mcp.json` déclare le serveur MCP officiel d'Alpaca (`alpaca-mcp-server`, lancé avec `uvx`).
-Il faut `uv` installé (https://docs.astral.sh/uv/) et les variables `ALPACA_API_KEY` et `ALPACA_SECRET_KEY` dans ton shell.
+Le fichier `.mcp.json` déclare le serveur MCP officiel d'Alpaca (`alpaca-mcp-server`, lancé avec `uvx`, en version épinglée).
+Il faut `uv` installé globalement, donc `uvx` accessible dans le PATH (https://docs.astral.sh/uv/), et les variables `ALPACA_API_KEY` et `ALPACA_SECRET_KEY` dans ton shell.
 
 **Claude Code** : lance `claude` à la racine du dépôt, le serveur est proposé automatiquement. Vérifie avec `/mcp`.
 
 **Claude Desktop** : ajoute le même bloc `alpaca` dans `claude_desktop_config.json` en remplaçant `${...}` par tes clés paper.
 
-Choix volontaire : le MCP est limité aux outils en **lecture** (`account,assets,stock-data,news`).
-L'outil `trading` du MCP permettrait à un agent de passer des ordres sans passer par nos règles de risque,
+Choix volontaire : le MCP est limité aux toolsets `account,assets,stock-data,news`, tous en **lecture** à une exception près.
+Le toolset `account` expose aussi `update_account_config`, un outil d'écriture. La règle `deny` de `.claude/settings.json` le bloque, mais uniquement dans Claude Code : sous Claude Desktop, il reste disponible, donc ne l'approuve pas.
+Le toolset `trading` du MCP permettrait à un agent de passer des ordres sans passer par nos règles de risque,
 donc il est désactivé. Les ordres passent uniquement par `AlpacaBroker.submit`.
 
 ## Journal
