@@ -56,6 +56,28 @@ Choix volontaire : le MCP est limité aux outils en **lecture** (`account,assets
 L'outil `trading` du MCP permettrait à un agent de passer des ordres sans passer par nos règles de risque,
 donc il est désactivé. Les ordres passent uniquement par `AlpacaBroker.submit`.
 
+## Backtest (étape 2)
+
+```bash
+trading-agents backtest                 # 5 ans, 10 000 $, télécharge les données Alpaca (clés requises)
+trading-agents backtest --top-n 10      # tester une variante
+trading-agents backtest --refresh       # forcer le retéléchargement (sinon cache data/bars.pkl)
+```
+
+Le rapport est écrit dans `reports/backtest.md` et la courbe de capital dans `reports/equity.csv`.
+
+Stratégie (`strategy.py`) : momentum tendanciel, rééquilibrage mensuel.
+- Filtre de marché : SPY sous sa moyenne 200 jours = aucun nouvel achat.
+- Titre éligible s'il est au-dessus de sa moyenne 200 jours.
+- Classement sur la performance 6 mois en sautant le dernier mois, on garde les 6 meilleurs.
+- Stop à 3 x ATR(20), borné entre 3 % et 8 %.
+
+Moteur (`backtest.py`) : décision à la clôture, exécution à l'ouverture suivante, 5 points de base de glissement,
+stops vérifiés sur le plus bas (sortie à l'ouverture en cas de gap), même `RiskManager` qu'en paper.
+Un test vérifie l'absence de biais d'anticipation (modifier le futur ne change pas le passé).
+
+Limite : l'univers est la liste actuelle des grandes capitalisations, donc biais du survivant. Les résultats sont optimistes.
+
 ## Journal
 
 Chaque contrôle de risque et chaque ordre est ajouté à `logs/journal.jsonl` (une ligne JSON par événement).
