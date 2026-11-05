@@ -25,6 +25,9 @@ Une panne ne peut donc pas avantager B.
    Attention : en `--dry-run`, le duel démarre quand même. Supprime `state/` pour repartir de zéro.
 4. Lancement réel : `trading-agents run-daily`.
 
+En cas de souci avec l analyste, `trading-agents analyst-test AAPL` fait un seul appel et affiche le message d erreur complet
+(cause la plus fréquente : crédits API à zéro sur console.anthropic.com).
+
 ## Planification sous Windows
 
 La routine doit tourner chaque jour de bourse **après 16h15 à New York**, soit 22h45 à Paris.
