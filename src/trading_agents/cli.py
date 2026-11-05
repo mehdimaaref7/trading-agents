@@ -75,8 +75,10 @@ def _backtest(a) -> int:
 
     panel, universe = _load_panel(a)
     v = _variant(a)
-    result = run_backtest(panel, universe, v.strategy(), v.risk(), initial_cash=a.capital)
-    report = report_markdown(result, title=f"Backtest momentum ({v.label()})")
+    result = run_backtest(panel, universe, v.strategy(), v.risk(), initial_cash=a.capital,
+                          cash_sweep=a.sweep)
+    report = report_markdown(result, title=f"Backtest momentum ({v.label()}"
+                             + (f", cash en {a.sweep}" if a.sweep else "") + ")")
     out = _write("backtest.md", report)
     result.equity.to_frame().join(result.benchmark).to_csv("reports/equity.csv")
     pd.DataFrame([{**t.__dict__, "pnl": t.pnl, "ret": t.ret} for t in result.trades]).to_csv(
@@ -100,11 +102,12 @@ def _optimize(a) -> int:
     panel, universe = _load_panel(a)
     split = pd.Timestamp(a.split)
     prog = lambda k, n: print(f"\r  variante {k}/{n}", end="", flush=True)
-    table, best, oos = walk_forward(panel, universe, split=a.split, progress=prog)
+    table, best, oos = walk_forward(panel, universe, split=a.split, progress=prog,
+                                    cash_sweep=a.sweep)
     print()
     ref = _variant(a)
-    ref_in = evaluate(ref, panel, universe, end=split - pd.Timedelta(days=1))
-    ref_oos = evaluate(ref, panel, universe, start=split)
+    ref_in = evaluate(ref, panel, universe, end=split - pd.Timedelta(days=1), cash_sweep=a.sweep)
+    ref_oos = evaluate(ref, panel, universe, start=split, cash_sweep=a.sweep)
     spy = panel["close"]["SPY"]
     spy_in = perf_stats(buy_and_hold(spy.loc[ref_in["result"].equity.index]))
     spy_oos = perf_stats(buy_and_hold(spy.loc[oos["result"].equity.index]))
@@ -137,11 +140,11 @@ def _coresat(a) -> int:
 
     panel, universe = _load_panel(a)
     v = _variant(a)
-    sat = run_backtest(panel, universe, v.strategy(), v.risk()).equity
+    sat = run_backtest(panel, universe, v.strategy(), v.risk(), cash_sweep=a.sweep).equity
     core = buy_and_hold(panel["close"][a.core].loc[sat.index])
     mix = blend(core, sat, a.weight)
     lines = [f"# Cœur-satellite : {a.weight:.0%} {a.core} + {1 - a.weight:.0%} stratégie", "",
-             f"Satellite : {v.label()}", "",
+             f"Satellite : {v.label()}" + (f", cash en {a.sweep}" if a.sweep else ""), "",
              "| Portefeuille | Rendement annuel | Sharpe | Drawdown max | Avec 200 €/mois : investi -> valeur |",
              "|---|---|---|---|---|"]
     for name, eq in ((f"100 % {a.core}", core), ("Cœur-satellite", mix), ("100 % stratégie", sat)):
@@ -165,6 +168,8 @@ def _add_strategy_args(p):
     p.add_argument("--max-stop", type=float, default=0.08, help="Distance max du stop (0.08 = 8 %%)")
     p.add_argument("--trailing", action="store_true", help="Stop suiveur")
     p.add_argument("--risk", type=float, default=0.005, help="Risque max par trade (0.005 = 0,5 %%)")
+    p.add_argument("--sweep", default=None, metavar="ETF",
+                   help="Placer le cash dormant dans cet ETF (ex. SPY), sauf en marché baissier")
 
 
 def main(argv: list[str] | None = None) -> int:

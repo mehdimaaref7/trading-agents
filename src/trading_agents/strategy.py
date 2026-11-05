@@ -49,6 +49,13 @@ class MomentumTrend:
     def warmup(self) -> int:
         return max(self.lookback, self.sma, self.atr_window) + 1
 
+    def risk_on(self, close: pd.DataFrame) -> bool:
+        """Marché haussier : le benchmark clôture au-dessus de sa moyenne 200 jours."""
+        if self.benchmark not in close or len(close) < self.sma:
+            return True
+        b = close[self.benchmark]
+        return bool(b.iloc[-1] >= b.iloc[-self.sma:].mean())
+
     def picks(self, close: pd.DataFrame, high: pd.DataFrame, low: pd.DataFrame,
               universe: list[str]) -> list[Pick]:
         """`close`, `high`, `low` doivent s'arrêter au jour de décision inclus."""
@@ -57,7 +64,7 @@ class MomentumTrend:
         last = close.iloc[-1]
         sma = close.iloc[-self.sma:].mean()
 
-        if self.benchmark in close and last[self.benchmark] < sma[self.benchmark]:
+        if not self.risk_on(close):
             return []  # marché baissier : cash
 
         mom = close.iloc[-1 - self.skip] / close.iloc[-1 - self.lookback] - 1

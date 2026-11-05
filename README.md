@@ -93,7 +93,8 @@ trading-agents backtest --top-n 10 --trailing --max-stop 0.12 --risk 0.01
 
 - `optimize` classe les variantes **uniquement** sur la période d'apprentissage (meilleur rendement avec un drawdown sous 20 %),
   puis montre la n°1 sur la période de validation. Si elle s'effondre en validation, c'est du surapprentissage.
-- Options de stratégie : `--top-n`, `--atr-mult`, `--max-stop`, `--trailing` (stop suiveur), `--risk` (risque par trade).
+- Options de stratégie : `--top-n`, `--atr-mult`, `--max-stop`, `--trailing` (stop suiveur), `--risk` (risque par trade),
+  `--sweep SPY` (le cash non utilisé est placé dans le SPY à chaque rééquilibrage, sauf en marché baissier).
 - Les limites du `RiskManager` du compte paper restent à leurs valeurs par défaut tant qu'une variante n'a pas été validée.
 
 Rapports : `reports/optimisation.md`, `reports/coeur_satellite.md`, `reports/trades.csv`.
