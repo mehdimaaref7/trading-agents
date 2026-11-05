@@ -57,14 +57,16 @@ def variants(grid: dict | None = None):
         yield Variant(**dict(zip(keys, combo)))
 
 
-def evaluate(v: Variant, panel, universe, start=None, end=None) -> dict:
-    res = run_backtest(panel, universe, v.strategy(), v.risk(), start=start, end=end)
+def evaluate(v: Variant, panel, universe, start=None, end=None, cash_sweep=None) -> dict:
+    res = run_backtest(panel, universe, v.strategy(), v.risk(), start=start, end=end,
+                       cash_sweep=cash_sweep)
     s, t = perf_stats(res.equity), trade_stats(res.trades)
     return {**s, "nb_trades": t["nb_trades"], "result": res}
 
 
 def walk_forward(panel, universe, split: str = "2025-01-01", min_trades: int = 20,
-                 max_drawdown: float = 0.20, progress=None, grid: dict | None = None) -> tuple[pd.DataFrame, Variant, dict]:
+                 max_drawdown: float = 0.20, progress=None, grid: dict | None = None,
+                 cash_sweep: str | None = None) -> tuple[pd.DataFrame, Variant, dict]:
     split_ts = pd.Timestamp(split)
     train_end = split_ts - pd.Timedelta(days=1)
     rows = []
@@ -72,14 +74,15 @@ def walk_forward(panel, universe, split: str = "2025-01-01", min_trades: int = 2
     for k, v in enumerate(all_v):
         if progress:
             progress(k + 1, len(all_v))
-        r = evaluate(v, panel, universe, end=train_end)
+        r = evaluate(v, panel, universe, end=train_end, cash_sweep=cash_sweep)
         rows.append({"variante": v, "sharpe": r["sharpe"], "cagr": r["cagr"],
                      "drawdown_max": r["drawdown_max"], "nb_trades": r["nb_trades"]})
     df = pd.DataFrame(rows)
     ok = df[(df.nb_trades >= min_trades) & (df.drawdown_max >= -max_drawdown)]
     if ok.empty:
-        raise ValueError("Aucune variante ne respecte les contraintes (trades, drawdown).")
+        # Verdict en soi : aucune variante n'est acceptable, on ne valide rien
+        return df.sort_values("cagr", ascending=False), None, None
     df = ok.sort_values("cagr", ascending=False)
     best = df.iloc[0]["variante"]
-    oos = evaluate(best, panel, universe, start=split_ts)
+    oos = evaluate(best, panel, universe, start=split_ts, cash_sweep=cash_sweep)
     return df, best, oos

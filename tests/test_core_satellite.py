@@ -51,3 +51,12 @@ def test_walk_forward_picks_on_train_only():
         p2[k].loc[p2[k].index >= split] *= 0.5
     _, best2, _ = walk_forward(p2, UNI, split=str(split.date()), min_trades=1, grid=grid)
     assert best2 == best
+
+
+def test_walk_forward_returns_none_when_no_variant_qualifies():
+    panel = make_panel(n=900, seed=11)
+    split = panel["close"].index[700]
+    grid = {"top_n": [3], "atr_mult": [3.0], "max_stop": [0.08], "trailing": [False],
+            "risk_per_trade": [0.005]}
+    table, best, oos = walk_forward(panel, UNI, split=str(split.date()), min_trades=10_000, grid=grid)
+    assert best is None and oos is None and len(table) == 1

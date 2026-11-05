@@ -70,9 +70,16 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
                  slippage: float = 0.0005,
                  benchmark: str = "SPY",
                  start: str | pd.Timestamp | None = None,
-                 end: str | pd.Timestamp | None = None) -> BacktestResult:
+                 end: str | pd.Timestamp | None = None,
+                 cash_sweep: str | None = None) -> BacktestResult:
     """`start`/`end` limitent la période évaluée ; l'historique antérieur sert
-    quand même au calcul des indicateurs (pas de démarrage à froid)."""
+    quand même au calcul des indicateurs (pas de démarrage à froid).
+
+    `cash_sweep` (ex. "SPY") : le cash non utilisé par la stratégie est placé
+    dans cet ETF à chaque rééquilibrage mensuel au lieu de dormir à 0 %,
+    sauf en marché baissier (filtre de la stratégie), où il reste en cash.
+    Cette poche n'est pas une position de la stratégie (pas de stop, hors
+    limites par ligne) ; elle est revendue avant chaque rééquilibrage."""
     strategy = strategy or MomentumTrend(benchmark=benchmark)
     risk = risk or RiskManager()
     o, h, l, c = (panel[k] for k in ("open", "high", "low", "close"))
@@ -82,6 +89,9 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
     pos: dict[str, Position] = {}
     trades: list[Trade] = []
     rejected = []
+    sweep_qty = 0.0
+    execute_month = True
+    sweep_allowed = True
     eq_hist = {}
     pending_sells: list[str] = []
     pending_buys: list = []
@@ -105,11 +115,15 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
     stop_i = len(dates) if end is None else int(dates.searchsorted(pd.Timestamp(end), side="right"))
     if first >= stop_i:
         raise ValueError("Période vide : pas assez d'historique avant la date de début.")
+    sweep_allowed = strategy.risk_on(c.iloc[:first])  # décision prise la veille du premier jour
     for i in range(first, stop_i):
         d = dates[i]
         op, hi, lo, cl = o.iloc[i], h.iloc[i], l.iloc[i], c.iloc[i]
 
         # 1. Ordres décidés la veille, exécutés à l'ouverture
+        if cash_sweep and execute_month and sweep_qty and pd.notna(op[cash_sweep]):
+            cash += sweep_qty * float(op[cash_sweep]) * (1 - slippage)
+            sweep_qty = 0.0
         for s in pending_sells:
             if s in pos and pd.notna(op[s]):
                 close_pos(s, float(op[s]), d, "rééquilibrage")
@@ -130,6 +144,11 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
             cash -= qty * fill
             pos[s] = Position(qty, fill, stop, d, pick.stop_pct)
         pending_sells, pending_buys = [], []
+        if cash_sweep and execute_month and sweep_allowed and pd.notna(op[cash_sweep]) and cash > 0:
+            px = float(op[cash_sweep]) * (1 + slippage)
+            sweep_qty = cash * 0.98 / px   # 2 % gardés en cash
+            cash -= sweep_qty * px
+        execute_month = False
 
         # 2. Stops intrajournaliers
         for s in list(pos):
@@ -140,6 +159,8 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
 
         # 3. Valorisation à la clôture
         values = sum(p.qty * float(cl[s]) for s, p in pos.items())
+        if sweep_qty and pd.notna(cl[cash_sweep]):
+            values += sweep_qty * float(cl[cash_sweep])
         eq = cash + values
         eq_hist[d] = eq
         peak = max(peak, eq)
@@ -156,6 +177,9 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
             wanted = {p.symbol for p in picks}
             pending_sells = [s for s in pos if s not in wanted]
             pending_buys = [p for p in picks if p.symbol not in pos]
+            execute_month = True
+            # En marché baissier, le cash reste en cash (on respecte le filtre)
+            sweep_allowed = strategy.risk_on(c.iloc[: i + 1])
             # Coupe-circuit drawdown : on n'achète plus, on garde les sorties
             if risk.kill_switch_reasons(Portfolio(eq, cash, {}, prev_eq, peak)):
                 pending_buys = []
@@ -163,6 +187,9 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
 
     # Clôture des positions restantes pour le décompte des trades
     last = dates[stop_i - 1]
+    if sweep_qty:
+        cash += sweep_qty * float(c.iloc[stop_i - 1][cash_sweep]) * (1 - slippage)
+        sweep_qty = 0.0
     for s in list(pos):
         close_pos(s, float(c.iloc[stop_i - 1][s]), last, "fin du test")
 

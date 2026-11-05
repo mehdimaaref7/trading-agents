@@ -88,3 +88,32 @@ def test_metrics_and_report():
     assert trade_stats(res.trades)["nb_trades"] == len(res.trades)
     md = report_markdown(res)
     assert "Sharpe" in md and "SPY" in md
+
+
+def test_cash_sweep_invests_idle_cash_in_bull_market():
+    p = make_panel(seed=4)
+    base = run_backtest(p, UNI)
+    swept = run_backtest(p, UNI, cash_sweep="SPY")
+    # marché haussier synthétique : le cash placé en SPY doit rapporter plus
+    assert swept.equity.iloc[-1] > base.equity.iloc[-1]
+    # les trades de la stratégie ne changent pas de nature (pas de trade SPY de balayage)
+    assert all(t.symbol != "SPY" or t.reason != "balayage" for t in swept.trades)
+
+
+def test_cash_sweep_respects_bear_filter():
+    drift = {s: -0.004 for s in SYMS}
+    p = make_panel(drift=drift, seed=2)
+    swept = run_backtest(p, UNI, cash_sweep="SPY")
+    # en marché baissier, ni la stratégie ni le balayage n'investissent
+    assert swept.equity.iloc[-1] >= swept.equity.iloc[0] * 0.98
+
+
+def test_cash_sweep_has_no_lookahead():
+    p1 = make_panel(seed=1)
+    p2 = {k: v.copy() for k, v in p1.items()}
+    cut = p1["close"].index[500]
+    for k in p2:
+        p2[k].loc[p2[k].index > cut] *= 0.5
+    e1 = run_backtest(p1, UNI, cash_sweep="SPY").equity.loc[:cut]
+    e2 = run_backtest(p2, UNI, cash_sweep="SPY").equity.loc[:cut]
+    pd.testing.assert_series_equal(e1, e2)
