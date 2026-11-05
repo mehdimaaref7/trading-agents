@@ -1,5 +1,7 @@
 # trading-agents
 
+[![CI](https://github.com/mehdimaaref7/trading-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/mehdimaaref7/trading-agents/actions/workflows/ci.yml)
+
 Agents IA de trading, en **paper trading uniquement** pour l'instant (compte Alpaca fictif).
 Le passage au réel se fera seulement après validation de critères définis à l'avance.
 
