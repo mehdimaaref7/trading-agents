@@ -2,7 +2,7 @@
   "mcpServers": {
     "alpaca": {
       "type": "stdio",
-      "command": "C:/Users/Dell/Desktop/dev/trading-agents/.venv/Scripts/uvx.exe",
+      "command": "uvx",
       "args": ["--python", "3.12", "alpaca-mcp-server"],
       "env": {
         "ALPACA_API_KEY": "${ALPACA_API_KEY}",

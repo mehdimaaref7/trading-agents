@@ -63,8 +63,10 @@ def _backtest(a) -> int:
     out.parent.mkdir(exist_ok=True)
     out.write_text(report, encoding="utf-8")
     result.equity.to_frame().join(result.benchmark).to_csv("reports/equity.csv")
+    pd.DataFrame([{**t.__dict__, "pnl": t.pnl, "ret": t.ret} for t in result.trades]).to_csv(
+        "reports/trades.csv", index=False)
     print(report)
-    print(f"\nRapport : {out}  |  Courbe : reports/equity.csv")
+    print(f"\nRapport : {out}  |  Courbe : reports/equity.csv  |  Trades : reports/trades.csv")
     return 0
 
 
