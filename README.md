@@ -78,6 +78,26 @@ Un test vérifie l'absence de biais d'anticipation (modifier le futur ne change 
 
 Limite : l'univers est la liste actuelle des grandes capitalisations, donc biais du survivant. Les résultats sont optimistes.
 
+## Cœur-satellite et optimisation
+
+Le premier backtest réel (juin 2021 à novembre 2026) a donné +3,8 %/an contre +12,2 % pour le SPY.
+On passe donc à un cadre **cœur-satellite** : la majorité du capital suit un ETF, et les agents gèrent le satellite.
+Ils devront battre le cœur avant de recevoir plus de capital.
+
+```bash
+trading-agents optimize                     # 72 variantes, choix sur 2021-2024, validation sur 2025+
+trading-agents coresat                      # 75 % SPY + 25 % stratégie, avec 200 €/mois
+trading-agents coresat --weight 0.8 --core QQQ --trailing --max-stop 0.15 --risk 0.01
+trading-agents backtest --top-n 10 --trailing --max-stop 0.12 --risk 0.01
+```
+
+- `optimize` classe les variantes **uniquement** sur la période d'apprentissage (meilleur rendement avec un drawdown sous 20 %),
+  puis montre la n°1 sur la période de validation. Si elle s'effondre en validation, c'est du surapprentissage.
+- Options de stratégie : `--top-n`, `--atr-mult`, `--max-stop`, `--trailing` (stop suiveur), `--risk` (risque par trade).
+- Les limites du `RiskManager` du compte paper restent à leurs valeurs par défaut tant qu'une variante n'a pas été validée.
+
+Rapports : `reports/optimisation.md`, `reports/coeur_satellite.md`, `reports/trades.csv`.
+
 ## Journal
 
 Chaque contrôle de risque et chaque ordre est ajouté à `logs/journal.jsonl` (une ligne JSON par événement).

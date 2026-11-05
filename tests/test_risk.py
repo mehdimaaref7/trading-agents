@@ -117,3 +117,10 @@ def test_missing_keys(monkeypatch, tmp_path):
     monkeypatch.delenv("ALPACA_SECRET_KEY", raising=False)
     with pytest.raises(ConfigError):
         load_settings()
+
+
+def test_stop_exactly_at_max_distance_is_accepted():
+    # 99.99 * (1 - 0.08) donne une distance légèrement > 0.08 en flottants
+    price = 99.99
+    d = rm.check_order(OrderRequest("AAPL", "buy", 1, price, price * (1 - 0.08)), pf())
+    assert d.approved, d.reasons

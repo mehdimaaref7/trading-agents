@@ -120,12 +120,12 @@ class RiskManager:
                 reasons.append("Le stop-loss doit être sous le prix d'entrée.")
             else:
                 dist = (o.price - o.stop_loss) / o.price
-                if dist > L.max_stop_distance_pct:
+                if dist > L.max_stop_distance_pct + 1e-9:  # tolérance d'arrondi
                     reasons.append(
                         f"Stop à {dist:.1%} du prix, maximum {L.max_stop_distance_pct:.0%}."
                     )
                 risk = (o.price - o.stop_loss) * o.qty
-                if risk > L.max_risk_per_trade_pct * p.equity:
+                if risk > L.max_risk_per_trade_pct * p.equity * (1 + 1e-9):
                     reasons.append(
                         f"Risque du trade {risk:.2f} au-delà de {L.max_risk_per_trade_pct:.1%} du capital."
                     )

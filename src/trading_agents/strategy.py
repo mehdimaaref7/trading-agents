@@ -43,6 +43,7 @@ class MomentumTrend:
     min_stop: float = 0.03
     max_stop: float = 0.08
     benchmark: str = "SPY"
+    trailing: bool = False   # stop suiveur : le stop remonte avec le cours
 
     @property
     def warmup(self) -> int:

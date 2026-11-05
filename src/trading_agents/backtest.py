@@ -28,6 +28,7 @@ class Position:
     entry: float
     stop: float
     entry_date: pd.Timestamp
+    stop_pct: float = 0.0
 
 
 @dataclass
@@ -67,7 +68,11 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
                  risk: RiskManager | None = None,
                  initial_cash: float = 10_000.0,
                  slippage: float = 0.0005,
-                 benchmark: str = "SPY") -> BacktestResult:
+                 benchmark: str = "SPY",
+                 start: str | pd.Timestamp | None = None,
+                 end: str | pd.Timestamp | None = None) -> BacktestResult:
+    """`start`/`end` limitent la période évaluée ; l'historique antérieur sert
+    quand même au calcul des indicateurs (pas de démarrage à froid)."""
     strategy = strategy or MomentumTrend(benchmark=benchmark)
     risk = risk or RiskManager()
     o, h, l, c = (panel[k] for k in ("open", "high", "low", "close"))
@@ -94,8 +99,13 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
         cash += p.qty * fill
         trades.append(Trade(sym, p.entry_date, date, p.qty, p.entry, fill, reason))
 
-    start = strategy.warmup
-    for i in range(start, len(dates)):
+    first = strategy.warmup
+    if start is not None:
+        first = max(first, int(dates.searchsorted(pd.Timestamp(start))))
+    stop_i = len(dates) if end is None else int(dates.searchsorted(pd.Timestamp(end), side="right"))
+    if first >= stop_i:
+        raise ValueError("Période vide : pas assez d'historique avant la date de début.")
+    for i in range(first, stop_i):
         d = dates[i]
         op, hi, lo, cl = o.iloc[i], h.iloc[i], l.iloc[i], c.iloc[i]
 
@@ -118,7 +128,7 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
                 rejected.append((d, s, dec.reasons))
                 continue
             cash -= qty * fill
-            pos[s] = Position(qty, fill, stop, d)
+            pos[s] = Position(qty, fill, stop, d, pick.stop_pct)
         pending_sells, pending_buys = [], []
 
         # 2. Stops intrajournaliers
@@ -134,8 +144,14 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
         eq_hist[d] = eq
         peak = max(peak, eq)
 
+        # Stop suiveur : remonte le stop sous le cours de clôture, jamais l'inverse
+        if strategy.trailing:
+            for s, p in pos.items():
+                if pd.notna(cl[s]):
+                    p.stop = max(p.stop, float(cl[s]) * (1 - p.stop_pct))
+
         # 4. Décision du mois
-        if _is_rebalance_day(dates, i):
+        if i + 1 < stop_i and _is_rebalance_day(dates, i):
             picks = strategy.picks(c.iloc[: i + 1], h.iloc[: i + 1], l.iloc[: i + 1], universe)
             wanted = {p.symbol for p in picks}
             pending_sells = [s for s in pos if s not in wanted]
@@ -146,9 +162,9 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
         prev_eq = eq
 
     # Clôture des positions restantes pour le décompte des trades
-    last = dates[-1]
+    last = dates[stop_i - 1]
     for s in list(pos):
-        close_pos(s, float(c.iloc[-1][s]), last, "fin du test")
+        close_pos(s, float(c.iloc[stop_i - 1][s]), last, "fin du test")
 
     equity = pd.Series(eq_hist, name="strategie")
     bench_px = c[benchmark].loc[equity.index]
