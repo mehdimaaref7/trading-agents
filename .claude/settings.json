@@ -3,5 +3,13 @@
     "deny": [
       "mcp__alpaca__update_account_config"
     ]
+  },
+  "extraKnownMarketplaces": {
+    "agiprolabs-claude-trading-skills": {
+      "source": {
+        "source": "github",
+        "repo": "agiprolabs/claude-trading-skills"
+      }
+    }
   }
 }
