@@ -105,6 +105,19 @@ def _optimize(a) -> int:
     table, best, oos = walk_forward(panel, universe, split=a.split, progress=prog,
                                     cash_sweep=a.sweep)
     print()
+    if best is None:
+        lines = ["# Optimisation : aucune variante acceptable", "",
+                 "Aucune variante ne garde un drawdown sous 20 % avec au moins 20 trades "
+                 "sur la période d'apprentissage. Rien n'est validé.", "",
+                 "| Variante (meilleur rendement d'abord) | Rendement annuel | Sharpe | Drawdown max | Trades |",
+                 "|---|---|---|---|---|"]
+        for _, r in table.head(5).iterrows():
+            lines.append(_fmt_stats(r["variante"].label(), r, int(r["nb_trades"])))
+        report = "\n".join(lines)
+        out = _write("optimisation.md", report)
+        print(report)
+        print(f"\nRapport : {out}")
+        return 1
     ref = _variant(a)
     ref_in = evaluate(ref, panel, universe, end=split - pd.Timedelta(days=1), cash_sweep=a.sweep)
     ref_oos = evaluate(ref, panel, universe, start=split, cash_sweep=a.sweep)

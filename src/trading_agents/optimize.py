@@ -80,7 +80,8 @@ def walk_forward(panel, universe, split: str = "2025-01-01", min_trades: int = 2
     df = pd.DataFrame(rows)
     ok = df[(df.nb_trades >= min_trades) & (df.drawdown_max >= -max_drawdown)]
     if ok.empty:
-        raise ValueError("Aucune variante ne respecte les contraintes (trades, drawdown).")
+        # Verdict en soi : aucune variante n'est acceptable, on ne valide rien
+        return df.sort_values("cagr", ascending=False), None, None
     df = ok.sort_values("cagr", ascending=False)
     best = df.iloc[0]["variante"]
     oos = evaluate(best, panel, universe, start=split_ts, cash_sweep=cash_sweep)
