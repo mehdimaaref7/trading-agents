@@ -101,6 +101,12 @@ trading-agents backtest --top-n 10 --trailing --max-stop 0.12 --risk 0.01
 
 Rapports : `reports/optimisation.md`, `reports/coeur_satellite.md`, `reports/trades.csv`.
 
+## Étape 3 : duel en paper trading
+
+A (stratégie seule) contre B (stratégie + agent analyste LLM qui peut seulement mettre un veto sur un achat).
+Routine quotidienne `trading-agents run-daily`, suivi `trading-agents duel` et `trading-agents heartbeat`,
+journal Markdown dans `journal/`. Installation, planification Windows et critères de jugement : `docs/etape3-paper.md`.
+
 ## Skills Claude
 
 Cinq skills tiers relus et copiés dans `.claude/skills/` (voir `.claude/skills/VENDORED.md`) :
