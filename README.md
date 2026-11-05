@@ -98,6 +98,15 @@ trading-agents backtest --top-n 10 --trailing --max-stop 0.12 --risk 0.01
 
 Rapports : `reports/optimisation.md`, `reports/coeur_satellite.md`, `reports/trades.csv`.
 
+## Skills Claude
+
+Cinq skills tiers relus et copiés dans `.claude/skills/` (voir `.claude/skills/VENDORED.md`) :
+`backtest-expert`, `position-sizer`, `market-breadth-analyzer`, `uptrend-analyzer`, `walk-forward-validation`.
+Le marketplace crypto d'agiprolabs est déclaré dans `.claude/settings.json` mais pas activé
+(`/plugin install trading-skills@agiprolabs-claude-trading-skills` le moment venu).
+
+Comparaison avec l'approche de l'article MindStudio : `docs/comparaison-mindstudio.md`.
+
 ## Journal
 
 Chaque contrôle de risque et chaque ordre est ajouté à `logs/journal.jsonl` (une ligne JSON par événement).
