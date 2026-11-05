@@ -71,13 +71,21 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
                  benchmark: str = "SPY",
                  start: str | pd.Timestamp | None = None,
                  end: str | pd.Timestamp | None = None,
-                 cash_sweep: str | None = None) -> BacktestResult:
+                 cash_sweep: str | None = None,
+                 vetoes: set[tuple[str, str]] | None = None,
+                 decide_on_first_day: bool = False) -> BacktestResult:
     """`start`/`end` limitent la période évaluée ; l'historique antérieur sert
     quand même au calcul des indicateurs (pas de démarrage à froid).
 
     `cash_sweep` (ex. "SPY") : le cash non utilisé par la stratégie est placé
     dans cet ETF à chaque rééquilibrage mensuel au lieu de dormir à 0 %,
     sauf en marché baissier (filtre de la stratégie), où il reste en cash.
+
+    `vetoes` : couples (date de décision ISO, symbole) retirés des choix de la
+    stratégie, pour rejouer le portefeuille B du duel (stratégie + analyste).
+
+    `decide_on_first_day` : une décision est aussi prise à la clôture du premier
+    jour (démarrage du duel sans attendre la fin du mois).
     Cette poche n'est pas une position de la stratégie (pas de stop, hors
     limites par ligne) ; elle est revendue avant chaque rééquilibrage."""
     strategy = strategy or MomentumTrend(benchmark=benchmark)
@@ -172,11 +180,16 @@ def run_backtest(panel: dict[str, pd.DataFrame], universe: list[str],
                     p.stop = max(p.stop, float(cl[s]) * (1 - p.stop_pct))
 
         # 4. Décision du mois
-        if i + 1 < stop_i and _is_rebalance_day(dates, i):
+        if i + 1 < stop_i and (_is_rebalance_day(dates, i) or (decide_on_first_day and i == first)):
             picks = strategy.picks(c.iloc[: i + 1], h.iloc[: i + 1], l.iloc[: i + 1], universe)
             wanted = {p.symbol for p in picks}
             pending_sells = [s for s in pos if s not in wanted]
             pending_buys = [p for p in picks if p.symbol not in pos]
+            if vetoes:
+                # Vetos de l'analyste (date de décision AAAA-MM-JJ, symbole) : ils ne
+                # portent que sur les nouveaux achats, jamais sur une position détenue
+                pending_buys = [p for p in pending_buys
+                                if (d.date().isoformat(), p.symbol) not in vetoes]
             execute_month = True
             # En marché baissier, le cash reste en cash (on respecte le filtre)
             sweep_allowed = strategy.risk_on(c.iloc[: i + 1])

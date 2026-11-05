@@ -173,6 +173,77 @@ def _coresat(a) -> int:
     return 0
 
 
+def _paper_env(dry_run: bool):
+    from pathlib import Path
+
+    from .analyst import NewsAnalyst, fetch_headlines
+    from .broker import AlpacaBroker
+    from .data import MarketData, to_panel
+    from .paper import Env
+    from .universe import BENCHMARK, UNIVERSE
+
+    settings = load_settings()
+    broker = AlpacaBroker(settings)
+    md = MarketData(settings)
+    symbols = sorted(UNIVERSE | {BENCHMARK})
+    analyst = NewsAnalyst(lambda s: fetch_headlines(settings.api_key, settings.secret_key, s))
+    return Env(trading=broker.client, broker=broker,
+               load_panel=lambda days: to_panel(md.daily_bars(symbols, days=days)),
+               analyst=analyst, state_dir=Path("state"), journal_dir=Path("journal"),
+               dry_run=dry_run)
+
+
+def _run_daily(a) -> int:
+    from .paper import run_daily
+    summary = run_daily(_paper_env(a.dry_run))
+    print(f"{summary['date']} : {summary['status']}"
+          + (" (décision du mois)" if summary.get("decision") else ""))
+    for r in summary.get("reviews", []):
+        print(f"  analyste {r['symbol']} : {'VETO' if r['veto'] else 'ok'} - {r['reason']}")
+    for o in summary.get("orders", []):
+        print(f"  ordre {o['side']} {o['symbol']} : {o['status']}")
+    if summary["status"] == "ok":
+        print(f"Journal : journal/{summary['date']}.md")
+    return 0
+
+
+def _duel(a) -> int:
+    from pathlib import Path
+
+    from .data import MarketData, to_panel
+    from .paper import DuelState, duel_table, replay_books
+    from .universe import BENCHMARK, UNIVERSE
+
+    path = Path("state/duel.json")
+    if not path.exists():
+        print("Pas de duel en cours : lance d'abord `trading-agents run-daily`.")
+        return 1
+    import datetime as dt
+    state = DuelState.load(path, dt.date.today())
+    md = MarketData(load_settings())
+    days = (dt.date.today() - dt.date.fromisoformat(state.start)).days + 420
+    panel = to_panel(md.daily_bars(sorted(UNIVERSE | {BENCHMARK}), days=days))
+    books = replay_books(panel, state)
+    print(f"Duel depuis le {state.start} : {len(state.vetoes)} veto(s) sur {len(state.reviews)} achat(s) examiné(s)\n")
+    print(duel_table(books) if books else "Pas encore de séance complète à comparer.")
+    return 0
+
+
+def _heartbeat(a) -> int:
+    from pathlib import Path
+
+    from .paper import heartbeat_age_hours
+    age = heartbeat_age_hours(Path("state"))
+    if age is None:
+        print("Aucun heartbeat : la routine n'a jamais tourné.")
+        return 1
+    print(f"Dernière exécution il y a {age:.1f} h.")
+    if age > 30:
+        print("ALERTE : la routine n'a pas tourné depuis plus de 30 h (hors week-end, vérifier le planificateur).")
+        return 1
+    return 0
+
+
 def _add_strategy_args(p):
     p.add_argument("--years", type=float, default=5)
     p.add_argument("--refresh", action="store_true", help="Retélécharger les données")
@@ -206,10 +277,15 @@ def main(argv: list[str] | None = None) -> int:
     cs.add_argument("--weight", type=float, default=0.75, help="Poids du cœur (0.75 = 75 %%)")
     cs.add_argument("--core", default="SPY")
     cs.add_argument("--monthly", type=float, default=200)
+    r = sub.add_parser("run-daily", help="Routine quotidienne du duel (à lancer après la clôture de New York)")
+    r.add_argument("--dry-run", action="store_true", help="Tout calculer sans envoyer d'ordre")
+    sub.add_parser("duel", help="Comparer A (stratégie seule) et B (stratégie + analyste) depuis le début")
+    sub.add_parser("heartbeat", help="Vérifier que la routine tourne bien")
     a = ap.parse_args(argv)
     try:
         handlers = {"backtest": _backtest, "optimize": _optimize, "coresat": _coresat,
-                    "check": _check}
+                    "check": _check, "run-daily": _run_daily, "duel": _duel,
+                    "heartbeat": _heartbeat}
         if a.cmd == "status":
             return _status()
         return handlers[a.cmd](a)
