@@ -207,6 +207,25 @@ def _run_daily(a) -> int:
     return 0
 
 
+def _analyst_test(a) -> int:
+    from .analyst import NewsAnalyst, fetch_headlines
+    from .strategy import Pick
+
+    settings = load_settings()
+    news = fetch_headlines(settings.api_key, settings.secret_key, a.symbol.upper())
+    print(f"{len(news)} articles récents pour {a.symbol.upper()}")
+    for n in news[:3]:
+        print(f"  {n['date']} {n['titre']}")
+    analyst = NewsAnalyst(lambda s: news)
+    import datetime as dt
+    v = analyst.review(Pick(a.symbol.upper(), 0.06, f"{a.symbol.upper()} : test de l'analyste"),
+                       dt.date.today().isoformat())
+    print(f"Modèle : {analyst.model}")
+    print(f"Verdict : {'VETO' if v.veto else 'pas de veto'} ({v.confidence:.0%}), disponible : {v.available}")
+    print(f"Raison : {v.reason}")
+    return 0 if v.available else 1
+
+
 def _duel(a) -> int:
     from pathlib import Path
 
@@ -279,12 +298,14 @@ def main(argv: list[str] | None = None) -> int:
     cs.add_argument("--monthly", type=float, default=200)
     r = sub.add_parser("run-daily", help="Routine quotidienne du duel (à lancer après la clôture de New York)")
     r.add_argument("--dry-run", action="store_true", help="Tout calculer sans envoyer d'ordre")
+    at = sub.add_parser("analyst-test", help="Tester l'analyste sur un titre (un seul appel, quelques centimes)")
+    at.add_argument("symbol")
     sub.add_parser("duel", help="Comparer A (stratégie seule) et B (stratégie + analyste) depuis le début")
     sub.add_parser("heartbeat", help="Vérifier que la routine tourne bien")
     a = ap.parse_args(argv)
     try:
         handlers = {"backtest": _backtest, "optimize": _optimize, "coresat": _coresat,
-                    "check": _check, "run-daily": _run_daily, "duel": _duel,
+                    "check": _check, "run-daily": _run_daily, "analyst-test": _analyst_test, "duel": _duel,
                     "heartbeat": _heartbeat}
         if a.cmd == "status":
             return _status()

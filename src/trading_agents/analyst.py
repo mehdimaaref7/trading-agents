@@ -101,16 +101,23 @@ class NewsAnalyst:
                 f"{json.dumps(headlines, ensure_ascii=False, indent=1)}")
         try:
             import anthropic
-            resp = self.client.beta.messages.create(
+            params = dict(
                 model=self.model,
                 max_tokens=4000,
-                betas=["server-side-fallback-2026-07-01"],
-                fallbacks="default",
                 system=SYSTEM_PROMPT,
                 output_config={"effort": "medium",
                                "format": {"type": "json_schema", "schema": VERDICT_SCHEMA}},
                 messages=[{"role": "user", "content": user}],
             )
+            try:
+                resp = self.client.beta.messages.create(
+                    betas=["server-side-fallback-2026-07-01"], fallbacks="default", **params)
+            except anthropic.BadRequestError as e:
+                # Repli de sécurité si le compte n'accepte pas l'option de fallback
+                msg = (getattr(e, "message", "") or str(e)).lower()
+                if "fallback" not in msg and "beta" not in msg:
+                    raise
+                resp = self.client.messages.create(**params)
             if resp.stop_reason == "refusal":
                 return Verdict(pick.symbol, False, "Le modèle a refusé de répondre.", 0.0,
                                available=False, headlines=len(headlines))
@@ -120,7 +127,9 @@ class NewsAnalyst:
             return Verdict(pick.symbol, False, f"Réponse illisible : {e}", 0.0,
                            available=False, headlines=len(headlines))
         except anthropic.APIError as e:
-            return Verdict(pick.symbol, False, f"Analyste indisponible : {type(e).__name__}", 0.0,
+            detail = getattr(e, "message", "") or str(e)
+            return Verdict(pick.symbol, False,
+                           f"Analyste indisponible : {type(e).__name__} : {detail[:300]}", 0.0,
                            available=False, headlines=len(headlines))
         conf = max(0.0, min(1.0, float(data["confidence"])))
         return Verdict(pick.symbol, bool(data["veto"]), str(data["reason"]), conf,

@@ -187,3 +187,35 @@ def test_run_daily_dry_run_sends_nothing(tmp_path):
     s = run_daily(env)
     assert s["decision"] and not env.broker.sent
     assert all(o["status"] == "dry_run" for o in s["orders"])
+
+
+def test_analyst_error_message_is_kept_for_diagnosis():
+    import anthropic
+    import httpx2
+    req = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    resp = httpx2.Response(400, request=req, json={"type": "error", "error": {
+        "type": "invalid_request_error", "message": "Your credit balance is too low"}})
+    err = anthropic.BadRequestError("Your credit balance is too low", response=resp, body=None)
+    v = NewsAnalyst(lambda s: [{"titre": "x"}], client=_client_returning(exc=err)).review(PICK, "2026-11-30")
+    assert not v.veto and not v.available and "credit balance" in v.reason
+
+
+def test_analyst_retries_without_fallbacks_when_rejected():
+    import anthropic
+    import httpx2
+    req = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    resp = httpx2.Response(400, request=req)
+    err = anthropic.BadRequestError("fallbacks: unsupported beta", response=resp, body=None)
+
+    def beta_create(**kw):
+        raise err
+
+    def plain_create(**kw):
+        assert "fallbacks" not in kw and "betas" not in kw
+        return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(
+            type="text", text=json.dumps({"veto": False, "reason": "ok", "confidence": 0.2}))])
+
+    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=beta_create)),
+                             messages=SimpleNamespace(create=plain_create))
+    v = NewsAnalyst(lambda s: [{"titre": "x"}], client=client).review(PICK, "2026-11-30")
+    assert v.available and not v.veto
